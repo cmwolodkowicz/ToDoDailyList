@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // ─────────────────────────────────────────────────────────────
 // MARK: - Enums
@@ -65,6 +66,36 @@ enum ReminderOffset: Int, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum Priority: String, Codable, CaseIterable {
+    case low    = "low"
+    case medium = "medium"
+    case high   = "high"
+
+    var displayName: String {
+        switch self {
+        case .low:    return "Low"
+        case .medium: return "Medium"
+        case .high:   return "High"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .low:    return .blue
+        case .medium: return .orange
+        case .high:   return .red
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .low:    return "arrow.down.circle.fill"
+        case .medium: return "minus.circle.fill"
+        case .high:   return "arrow.up.circle.fill"
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────
 // MARK: - TodoItem
 // ─────────────────────────────────────────────────────────────
@@ -93,6 +124,8 @@ struct TodoItem: Identifiable, Codable, Equatable, Hashable {
 
     var createdAt: Date
     var updatedAt: Date
+    
+    var priority: Priority
 
     // ── CodingKeys to match Supabase snake_case columns ──────
     enum CodingKeys: String, CodingKey {
@@ -109,6 +142,7 @@ struct TodoItem: Identifiable, Codable, Equatable, Hashable {
         case templateId    = "template_id"
         case createdAt     = "created_at"
         case updatedAt     = "updated_at"
+        case priority
     }
 
     // ── Convenience ──────────────────────────────────────────
@@ -142,7 +176,8 @@ extension TodoItem {
         listDate: String,
         deadline: Date? = nil,
         reminderOffset: Int? = nil,
-        recurrence: Recurrence = .once
+        recurrence: Recurrence = .once,
+        priority: Priority = .medium
     ) -> TodoItem {
         let now = Date()
         return TodoItem(
@@ -158,7 +193,8 @@ extension TodoItem {
             completedAt: nil,
             templateId: nil,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            priority: priority
         )
     }
 
@@ -171,6 +207,7 @@ extension TodoItem {
         copy.recurrence = .once
         copy.status = .pending
         copy.completedAt = nil
+        copy.priority = self.priority
         copy.createdAt = Date()
         copy.updatedAt = Date()
         return copy

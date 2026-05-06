@@ -19,24 +19,36 @@ final class AuthViewModel: ObservableObject {
 
     private func observeAuthState() async {
         isLoading = true
-        // Attempt to restore existing session
-        if let session = try? await SupabaseService.shared.client.auth.session {
-            currentUser = session.user
+        
+        do {
+            let session = try await SupabaseService.shared.client.auth.session
+            await MainActor.run {
+                currentUser = session.user
+            }
             await loadProfile(userId: session.user.id)
+        } catch {
+            // No existing session
         }
-        isLoading = false
+        
+        await MainActor.run {
+            isLoading = false
+        }
 
-        // Stream future changes
         for await event in service.authStateChanges {
             switch event {
             case .signedIn:
                 if let session = try? await SupabaseService.shared.client.auth.session {
-                    currentUser = session.user
+                    await MainActor.run {
+                        currentUser = session.user
+                    }
                     await loadProfile(userId: session.user.id)
                 }
             case .signedOut:
-                currentUser = nil
-                profile = nil
+                await MainActor.run {
+                    currentUser = nil
+                    profile = nil
+                    isLoading = false
+                }
             default:
                 break
             }

@@ -33,7 +33,10 @@ final class TodoViewModel: ObservableObject {
     func fetchAll(userId: UUID) async {
         isLoading = true
         do {
-            items = try await service.fetchAll(userId: userId)
+            // Only fetch last 30 days + next 30 days for performance
+            let start = DateUtils.adding(days: -30, to: DateUtils.today())
+            let end = DateUtils.adding(days: 30, to: DateUtils.today())
+            items = try await service.fetch(userId: userId, from: start, to: end)
         } catch {
             self.error = error.localizedDescription
         }
@@ -73,7 +76,8 @@ final class TodoViewModel: ObservableObject {
         listDate: String,
         deadline: Date?,
         reminderOffset: Int?,
-        recurrence: Recurrence
+        recurrence: Recurrence,
+        priority: Priority = .medium
     ) async {
         guard let userId else { return }
         let item = TodoItem.create(
@@ -83,7 +87,8 @@ final class TodoViewModel: ObservableObject {
             listDate: listDate,
             deadline: deadline,
             reminderOffset: reminderOffset,
-            recurrence: recurrence
+            recurrence: recurrence,
+            priority: priority
         )
         do {
             let saved = try await service.insert(item)
@@ -145,12 +150,17 @@ final class TodoViewModel: ObservableObject {
     // ── Delete ───────────────────────────────────────────────
 
     func delete(_ item: TodoItem) async {
+        await MainActor.run {
+            items.removeAll { $0.id == item.id }
+        }
         do {
             try await service.delete(id: item.id)
-            items.removeAll { $0.id == item.id }
             notifs.cancelReminder(for: item.id)
         } catch {
-            self.error = error.localizedDescription
+            await MainActor.run {
+                items.append(item)
+                self.error = error.localizedDescription
+            }
         }
     }
 
@@ -173,19 +183,26 @@ final class TodoViewModel: ObservableObject {
         guard let userId else { return }
         let td = DateUtils.today()
         let templates = items.filter { $0.recurrence != .once }
-
+        
+        // Generate dates for next 14 days
+        var datesToCheck: [String] = []
+        for i in 0...14 {
+            datesToCheck.append(DateUtils.adding(days: i, to: td))
+        }
+        
         for template in templates {
-            let alreadyExists = items.contains {
-                $0.templateId == template.id && $0.listDate == td
-            }
-            guard !alreadyExists, DateUtils.shouldSpawn(template, on: td) else { continue }
-
-            let spawned = template.spawn(for: td)
-            do {
-                let saved = try await service.insert(spawned)
-                items.append(saved)
-            } catch {
-                self.error = error.localizedDescription
+            for date in datesToCheck {
+                let alreadyExists = items.contains {
+                    $0.templateId == template.id && $0.listDate == date
+                }
+                guard !alreadyExists, DateUtils.shouldSpawn(template, on: date) else { continue }
+                let spawned = template.spawn(for: date)
+                do {
+                    let saved = try await service.insert(spawned)
+                    items.append(saved)
+                } catch {
+                    self.error = error.localizedDescription
+                }
             }
         }
     }
@@ -216,6 +233,15 @@ final class TodoViewModel: ObservableObject {
         if let idx = items.firstIndex(where: { $0.id == item.id }) {
             items[idx] = item
         }
+    }
+    
+    func cleanup() {
+        Task { await realtimeChannel?.unsubscribe() }
+        items = []
+        rolloverItems = []
+        showRollover = false
+        error = nil
+        userId = nil
     }
 
     deinit {

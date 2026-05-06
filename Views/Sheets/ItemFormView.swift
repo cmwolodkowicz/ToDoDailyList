@@ -17,6 +17,7 @@ struct ItemFormView: View {
     @State private var reminderOffset: ReminderOffset = .oneDay
     @State private var recurrence: Recurrence = .once
     @State private var isSaving = false
+    @State private var priority: Priority = .medium
 
     var isEditing: Bool { editItem != nil }
     var isValid:   Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -31,6 +32,15 @@ struct ItemFormView: View {
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(2...4)
                         .foregroundStyle(.secondary)
+                    
+                    Picker("Priority", selection: $priority) {
+                        ForEach(Priority.allCases, id: \.self) { p in
+                            Label(p.displayName, systemImage: p.icon)
+                                .foregroundStyle(p.color)
+                                .tag(p)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                 }
 
                 // ── Date ─────────────────────────────────────
@@ -95,12 +105,12 @@ struct ItemFormView: View {
 
     private func prefill() {
         listDate = defaultDate
-
         guard let item = editItem else { return }
         title      = item.title
         notes      = item.notes ?? ""
         listDate   = item.listDate
         recurrence = item.recurrence
+        priority   = item.priority
 
         if let d = item.deadline {
             hasDeadline = true
@@ -127,6 +137,7 @@ struct ItemFormView: View {
             updated.deadline       = finalDeadline
             updated.reminderOffset = finalReminderOffset
             updated.recurrence     = recurrence
+            updated.priority       = priority
             await todoVM.updateItem(updated)
         } else {
             await todoVM.addItem(
@@ -135,7 +146,8 @@ struct ItemFormView: View {
                 listDate:       listDate,
                 deadline:       finalDeadline,
                 reminderOffset: finalReminderOffset,
-                recurrence:     recurrence
+                recurrence:     recurrence,
+                priority:       priority
             )
         }
         isSaving = false

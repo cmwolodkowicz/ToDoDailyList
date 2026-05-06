@@ -6,7 +6,14 @@ struct DailyListView: View {
     @State private var showAddSheet = false
     @State private var editItem: TodoItem?
 
-    var pending:   [TodoItem] { todoVM.pending(for: viewDate) }
+    var pending: [TodoItem] {
+        todoVM.pending(for: viewDate).sorted {
+            let order: [Priority] = [.high, .medium, .low]
+            let i0 = order.firstIndex(of: $0.priority) ?? 1
+            let i1 = order.firstIndex(of: $1.priority) ?? 1
+            return i0 < i1
+        }
+    }
     var completed: [TodoItem] { todoVM.completed(for: viewDate) }
     var obeItems:  [TodoItem] { todoVM.obe(for: viewDate) }
     var allItems:  [TodoItem] { todoVM.items(for: viewDate) }
@@ -41,13 +48,50 @@ struct DailyListView: View {
                 } else {
                     List {
                         // Pending
-                        if !pending.isEmpty {
+                        // High priority
+                        let highItems = pending.filter { $0.priority == .high }
+                        let mediumItems = pending.filter { $0.priority == .medium }
+                        let lowItems = pending.filter { $0.priority == .low }
+
+                        if !highItems.isEmpty {
                             Section {
-                                ForEach(pending) { item in
+                                ForEach(highItems) { item in
                                     TodoRow(item: item)
                                         .environmentObject(todoVM)
                                         .onTapGesture { editItem = item }
                                 }
+                            } header: {
+                                Label("High Priority", systemImage: "arrow.up.circle.fill")
+                                    .foregroundStyle(.red)
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                        }
+
+                        if !mediumItems.isEmpty {
+                            Section {
+                                ForEach(mediumItems) { item in
+                                    TodoRow(item: item)
+                                        .environmentObject(todoVM)
+                                        .onTapGesture { editItem = item }
+                                }
+                            } header: {
+                                Label("Medium Priority", systemImage: "minus.circle.fill")
+                                    .foregroundStyle(.orange)
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                        }
+
+                        if !lowItems.isEmpty {
+                            Section {
+                                ForEach(lowItems) { item in
+                                    TodoRow(item: item)
+                                        .environmentObject(todoVM)
+                                        .onTapGesture { editItem = item }
+                                }
+                            } header: {
+                                Label("Low Priority", systemImage: "arrow.down.circle.fill")
+                                    .foregroundStyle(.blue)
+                                    .font(.subheadline.weight(.semibold))
                             }
                         }
 

@@ -40,7 +40,9 @@ struct TodoRow: View {
                 }
 
                 // Meta tags
-                HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Priority always shows
+                    
                     if let deadline = item.deadline {
                         MetaTag(
                             icon: "flag.fill",
@@ -49,7 +51,7 @@ struct TodoRow: View {
                         )
                     }
                     if item.reminderOffset != nil {
-                        MetaTag(icon: "bell.fill", text: "Reminder", color: .indigo)
+                        MetaTag(icon: "bell.fill", text: "Reminder set", color: .indigo)
                     }
                     if item.recurrence != .once {
                         MetaTag(icon: "repeat", text: item.recurrence.displayName, color: .teal)
@@ -64,7 +66,10 @@ struct TodoRow: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !isDone && !isOBE {
                 Button(role: .destructive) {
-                    showDeleteConfirm = true
+                    Task {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        await todoVM.delete(item)
+                    }
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }

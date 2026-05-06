@@ -34,6 +34,11 @@ struct ContentView: View {
                 await todoVM.bootstrap(userId: userId)
             }
         }
+        .onChange(of: authVM.currentUser) { _, newUser in
+            if newUser == nil {
+                todoVM.cleanup()
+            }
+        }
         .alert("Error", isPresented: .constant(todoVM.error != nil)) {
             Button("OK") { todoVM.error = nil }
         } message: {

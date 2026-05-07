@@ -79,18 +79,18 @@ final class TodoService {
     }
     
     func deleteSeries(templateId: UUID) async throws {
-        // Delete the template
-        try await db
-            .from(table)
-            .delete()
-            .eq("id", value: templateId.uuidString)
-            .execute()
-        
-        // Delete all spawned copies
+        // Delete spawned copies first
         try await db
             .from(table)
             .delete()
             .eq("template_id", value: templateId.uuidString)
+            .execute()
+        
+        // Then delete the template itself
+        try await db
+            .from(table)
+            .delete()
+            .eq("id", value: templateId.uuidString)
             .execute()
     }
 

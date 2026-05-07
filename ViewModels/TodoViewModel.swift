@@ -93,8 +93,15 @@ final class TodoViewModel: ObservableObject {
         item.recurrenceEndDate = recurrenceEndDate
         do {
             let saved = try await service.insert(item)
-            items.append(saved)
+            await MainActor.run {
+                items.append(saved)
+            }
             notifs.scheduleReminder(for: saved)
+            
+            // Immediately spawn future occurrences if recurring
+            if recurrence != .once {
+                await spawnRecurringItems()
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -166,19 +173,23 @@ final class TodoViewModel: ObservableObject {
     }
 
     func deleteSeries(_ item: TodoItem) async {
-        // Find the template id — either this item is the template, or it has a templateId
+        // If this item is a spawned copy, templateId points to the original
+        // If this item IS the original template, its own id is the templateId
         let templateId = item.templateId ?? item.id
         
-        // Remove all from local array
-        await MainActor.run {
-            items.removeAll { $0.id == templateId || $0.templateId == templateId }
-        }
-        
-        // Delete all from database
         do {
             try await service.deleteSeries(templateId: templateId)
+            await MainActor.run {
+                items.removeAll { itemInList in
+                    itemInList.id == templateId ||           // the template itself
+                    itemInList.templateId == templateId ||   // spawned copies
+                    itemInList.id == item.id                 // the item we tapped (in case it's a copy)
+                }
+            }
         } catch {
-            self.error = error.localizedDescription
+            await MainActor.run {
+                self.error = error.localizedDescription
+            }
         }
     }
 

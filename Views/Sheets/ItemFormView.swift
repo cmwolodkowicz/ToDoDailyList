@@ -168,7 +168,8 @@ struct ItemFormView: View {
                 deadline:       finalDeadline,
                 reminderOffset: finalReminderOffset,
                 recurrence:     recurrence,
-                priority:       priority
+                priority:       priority,
+                recurrenceEndDate:  hasEndDate ? DateUtils.string(from: recurrenceEndDate) : nil
             )
         }
         isSaving = false

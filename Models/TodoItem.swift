@@ -127,6 +127,8 @@ struct TodoItem: Identifiable, Codable, Equatable, Hashable {
     
     var priority: Priority
     var recurrenceEndDate: String?  // nil = indefinite
+    
+    var movedToDate: String?
 
     // ── CodingKeys to match Supabase snake_case columns ──────
     enum CodingKeys: String, CodingKey {
@@ -145,6 +147,7 @@ struct TodoItem: Identifiable, Codable, Equatable, Hashable {
         case updatedAt     = "updated_at"
         case priority
         case recurrenceEndDate = "recurrence_end_date"
+        case movedToDate = "moved_to_date"
     }
 
     // ── Convenience ──────────────────────────────────────────

@@ -140,10 +140,37 @@ final class TodoViewModel: ObservableObject {
     // ── Move to date ─────────────────────────────────────────
 
     func move(_ item: TodoItem, to date: String) async {
-        var updated = item
-        updated.listDate = date
-        updated.status = .pending
-        await updateItem(updated)
+        // Mark the original as moved
+        var original = item
+        original.status = .done
+        original.movedToDate = date
+        original.completedAt = Date()
+        await updateItem(original)
+        
+        // Create a fresh copy on the new date
+        guard let userId else { return }
+        var newItem = TodoItem.create(
+            userId: userId,
+            title: item.title,
+            notes: item.notes,
+            listDate: date,
+            deadline: item.deadline,
+            reminderOffset: item.reminderOffset,
+            recurrence: item.recurrence,
+            priority: item.priority
+        )
+        newItem.templateId = item.templateId
+        newItem.recurrenceEndDate = item.recurrenceEndDate
+        
+        do {
+            let saved = try await service.insert(newItem)
+            await MainActor.run {
+                items.append(saved)
+            }
+            notifs.scheduleReminder(for: saved)
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     // ── Undo (revert to pending) ─────────────────────────────

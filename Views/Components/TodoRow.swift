@@ -8,7 +8,8 @@ struct TodoRow: View {
     @State private var showDeleteConfirm = false
     @State private var showDeleteOptions = false
 
-    var isDone: Bool { item.status == .done }
+    var isDone: Bool { item.status == .done && item.movedToDate == nil }
+    var isMoved: Bool { item.status == .done && item.movedToDate != nil }
     var isOBE:  Bool { item.status == .obe }
 
     var body: some View {
@@ -30,8 +31,8 @@ struct TodoRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
                     .font(.body.weight(.medium))
-                    .strikethrough(isDone || isOBE)
-                    .foregroundStyle(isDone || isOBE ? .tertiary : .primary)
+                    .strikethrough(isDone || isOBE || isMoved)
+                    .foregroundStyle(isDone || isOBE || isMoved ? .tertiary : .primary)
 
                 if let notes = item.notes, !notes.isEmpty {
                     Text(notes)
@@ -39,11 +40,16 @@ struct TodoRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+                
+                // Moved note
+                if let movedTo = item.movedToDate {
+                    Label("Moved to \(DateUtils.displayString(for: movedTo))", systemImage: "arrow.right")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                }
 
                 // Meta tags
                 VStack(alignment: .leading, spacing: 4) {
-                    // Priority always shows
-                    
                     if let deadline = item.deadline {
                         MetaTag(
                             icon: "flag.fill",
@@ -140,6 +146,10 @@ struct TodoRow: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title3)
                 .foregroundStyle(.green)
+        } else if isMoved {
+            Image(systemName: "arrow.right.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.orange)
         } else if isOBE {
             Image(systemName: "xmark.circle.fill")
                 .font(.title3)

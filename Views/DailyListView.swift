@@ -14,8 +14,9 @@ struct DailyListView: View {
             return i0 < i1
         }
     }
-    var completed: [TodoItem] { todoVM.completed(for: viewDate) }
-    var obeItems:  [TodoItem] { todoVM.obe(for: viewDate) }
+    var completed: [TodoItem] { todoVM.completed(for: viewDate).filter { $0.movedToDate == nil } }
+    var moved: [TodoItem]     { todoVM.completed(for: viewDate).filter { $0.movedToDate != nil } }
+    var obeItems: [TodoItem]  { todoVM.obe(for: viewDate) }
     var allItems:  [TodoItem] { todoVM.items(for: viewDate) }
 
     var isToday:  Bool { viewDate == DateUtils.today() }
@@ -33,6 +34,7 @@ struct DailyListView: View {
                 StatsBar(
                     pending: pending.count,
                     done: completed.count,
+                    moved: moved.count,
                     obe: obeItems.count
                 )
                 .padding(.horizontal)
@@ -99,6 +101,16 @@ struct DailyListView: View {
                         if !completed.isEmpty {
                             Section("Completed") {
                                 ForEach(completed) { item in
+                                    TodoRow(item: item)
+                                        .environmentObject(todoVM)
+                                }
+                            }
+                        }
+                        
+                        // Moved
+                        if !moved.isEmpty {
+                            Section("Moved") {
+                                ForEach(moved) { item in
                                     TodoRow(item: item)
                                         .environmentObject(todoVM)
                                 }
@@ -197,12 +209,14 @@ struct DateNavigator: View {
 struct StatsBar: View {
     let pending: Int
     let done: Int
+    let moved: Int
     let obe: Int
 
     var body: some View {
         HStack(spacing: 10) {
             StatChip(label: "To Do",  count: pending, color: .orange)
             StatChip(label: "Done",   count: done,    color: .green)
+            StatChip(label: "Moved",  count: moved,   color: .orange)
             StatChip(label: "OBE",    count: obe,     color: .secondary)
         }
     }

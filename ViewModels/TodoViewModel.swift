@@ -33,9 +33,8 @@ final class TodoViewModel: ObservableObject {
     func fetchAll(userId: UUID) async {
         isLoading = true
         do {
-            // Only fetch last 30 days + next 30 days for performance
             let start = DateUtils.adding(days: -30, to: DateUtils.today())
-            let end = DateUtils.adding(days: 30, to: DateUtils.today())
+            let end = DateUtils.adding(days: 60, to: DateUtils.today())
             items = try await service.fetch(userId: userId, from: start, to: end)
         } catch {
             self.error = error.localizedDescription
@@ -77,10 +76,11 @@ final class TodoViewModel: ObservableObject {
         deadline: Date?,
         reminderOffset: Int?,
         recurrence: Recurrence,
-        priority: Priority = .medium
+        priority: Priority = .medium,
+        recurrenceEndDate: String? = nil
     ) async {
         guard let userId else { return }
-        let item = TodoItem.create(
+        var item = TodoItem.create(
             userId: userId,
             title: title,
             notes: notes,
@@ -90,6 +90,7 @@ final class TodoViewModel: ObservableObject {
             recurrence: recurrence,
             priority: priority
         )
+        item.recurrenceEndDate = recurrenceEndDate
         do {
             let saved = try await service.insert(item)
             items.append(saved)
@@ -164,6 +165,23 @@ final class TodoViewModel: ObservableObject {
         }
     }
 
+    func deleteSeries(_ item: TodoItem) async {
+        // Find the template id — either this item is the template, or it has a templateId
+        let templateId = item.templateId ?? item.id
+        
+        // Remove all from local array
+        await MainActor.run {
+            items.removeAll { $0.id == templateId || $0.templateId == templateId }
+        }
+        
+        // Delete all from database
+        do {
+            try await service.deleteSeries(templateId: templateId)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     // ── Rollover check ───────────────────────────────────────
 
     func checkRollover() async {
@@ -182,27 +200,50 @@ final class TodoViewModel: ObservableObject {
     func spawnRecurringItems() async {
         guard let userId else { return }
         let td = DateUtils.today()
-        let templates = items.filter { $0.recurrence != .once }
         
-        // Generate dates for next 14 days
+        // Only true templates
+        let templates = items.filter { $0.recurrence != .once && $0.templateId == nil }
+        
+        guard !templates.isEmpty else { return }
+        
+        // Check 60 days ahead
         var datesToCheck: [String] = []
-        for i in 0...14 {
+        for i in 1...60 {
             datesToCheck.append(DateUtils.adding(days: i, to: td))
         }
         
+        var newItems: [TodoItem] = []
+        
         for template in templates {
             for date in datesToCheck {
-                let alreadyExists = items.contains {
-                    $0.templateId == template.id && $0.listDate == date
+                // Respect end date
+                if let endDate = template.recurrenceEndDate, date > endDate {
+                    continue
                 }
-                guard !alreadyExists, DateUtils.shouldSpawn(template, on: date) else { continue }
+                
+                // Check if already exists in local items OR newly added items
+                let alreadyExists = items.contains {
+                    ($0.templateId == template.id && $0.listDate == date)
+                } || newItems.contains {
+                    ($0.templateId == template.id && $0.listDate == date)
+                }
+                
+                guard !alreadyExists else { continue }
+                guard DateUtils.shouldSpawn(template, on: date) else { continue }
+                
                 let spawned = template.spawn(for: date)
                 do {
                     let saved = try await service.insert(spawned)
-                    items.append(saved)
+                    newItems.append(saved)
                 } catch {
                     self.error = error.localizedDescription
                 }
+            }
+        }
+        
+        if !newItems.isEmpty {
+            await MainActor.run {
+                items.append(contentsOf: newItems)
             }
         }
     }

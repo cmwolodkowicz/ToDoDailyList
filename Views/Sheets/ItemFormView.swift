@@ -18,6 +18,8 @@ struct ItemFormView: View {
     @State private var recurrence: Recurrence = .once
     @State private var isSaving = false
     @State private var priority: Priority = .medium
+    @State private var hasEndDate = false
+    @State private var recurrenceEndDate = Date()
 
     var isEditing: Bool { editItem != nil }
     var isValid:   Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -77,9 +79,20 @@ struct ItemFormView: View {
                     .pickerStyle(.menu)
 
                     if recurrence != .once {
-                        Label("A new item will be added to your list automatically", systemImage: "info.circle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Toggle("Set End Date", isOn: $hasEndDate)
+                        
+                        if hasEndDate {
+                            DatePicker(
+                                "End Date",
+                                selection: $recurrenceEndDate,
+                                in: (DateUtils.date(from: listDate) ?? Date())...,
+                                displayedComponents: .date
+                            )
+                        } else {
+                            Label("Repeats indefinitely", systemImage: "infinity")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -120,6 +133,10 @@ struct ItemFormView: View {
             hasReminder    = true
             reminderOffset = offset
         }
+        if let endDate = item.recurrenceEndDate {
+            hasEndDate = true
+            recurrenceEndDate = DateUtils.date(from: endDate) ?? Date()
+        }
     }
 
     // ── Save ─────────────────────────────────────────────────
@@ -138,6 +155,10 @@ struct ItemFormView: View {
             updated.reminderOffset = finalReminderOffset
             updated.recurrence     = recurrence
             updated.priority       = priority
+            // In edit path
+            updated.recurrenceEndDate = hasEndDate ? DateUtils.string(from: recurrenceEndDate) : nil
+
+            // In create path — update addItem call to include it
             await todoVM.updateItem(updated)
         } else {
             await todoVM.addItem(

@@ -6,6 +6,7 @@ struct TodoRow: View {
 
     @State private var showMoveSheet = false
     @State private var showDeleteConfirm = false
+    @State private var showDeleteOptions = false
 
     var isDone: Bool { item.status == .done }
     var isOBE:  Bool { item.status == .obe }
@@ -53,8 +54,8 @@ struct TodoRow: View {
                     if item.reminderOffset != nil {
                         MetaTag(icon: "bell.fill", text: "Reminder set", color: .indigo)
                     }
-                    if item.recurrence != .once {
-                        MetaTag(icon: "repeat", text: item.recurrence.displayName, color: .teal)
+                    if item.recurrence != .once || item.templateId != nil {
+                        MetaTag(icon: "repeat", text: "Recurring", color: .teal)
                     }
                 }
                 .padding(.top, 2)
@@ -65,13 +66,21 @@ struct TodoRow: View {
         .padding(.vertical, 4)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !isDone && !isOBE {
-                Button(role: .destructive) {
-                    Task {
-                        try? await Task.sleep(nanoseconds: 100_000_000)
-                        await todoVM.delete(item)
+                if item.recurrence != .once || item.templateId != nil {
+                    // Recurring — show options dialog, no destructive role
+                    Button {
+                        showDeleteOptions = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
-                } label: {
-                    Label("Delete", systemImage: "trash")
+                    .tint(.red)
+                } else {
+                    // Non-recurring — delete directly
+                    Button(role: .destructive) {
+                        Task { await todoVM.delete(item) }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
 
                 Button {
@@ -108,10 +117,16 @@ struct TodoRow: View {
                 .tint(.green)
             }
         }
-        .confirmationDialog("Delete this item?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
+        .confirmationDialog("Delete Item", isPresented: $showDeleteOptions, titleVisibility: .visible) {
+            Button("Delete This Occurrence Only", role: .destructive) {
                 Task { await todoVM.delete(item) }
             }
+            Button("Delete Entire Series", role: .destructive) {
+                Task { await todoVM.deleteSeries(item) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This is a recurring item. Do you want to delete just this occurrence or the entire series?")
         }
         .sheet(isPresented: $showMoveSheet) {
             MoveDateSheet(item: item)

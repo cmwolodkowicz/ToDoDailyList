@@ -2,12 +2,12 @@ import SwiftUI
 
 struct DailyListView: View {
     @EnvironmentObject var todoVM: TodoViewModel
-    @State private var viewDate = DateUtils.today()
+    @Binding var sharedDate: String
     @State private var showAddSheet = false
     @State private var editItem: TodoItem?
 
     var pending: [TodoItem] {
-        todoVM.pending(for: viewDate)
+        todoVM.pending(for: sharedDate)
             .filter { !isDailySpawn($0) }
             .sorted {
                 let order: [Priority] = [.high, .medium, .low]
@@ -19,7 +19,7 @@ struct DailyListView: View {
     }
 
     var dailyItems: [TodoItem] {
-        todoVM.pending(for: viewDate)
+        todoVM.pending(for: sharedDate)
             .filter { isDailySpawn($0) }
             .sorted { $0.orderIndex < $1.orderIndex }
     }
@@ -33,19 +33,19 @@ struct DailyListView: View {
         }
         return false
     }
-    var completed: [TodoItem] { todoVM.completed(for: viewDate).filter { $0.movedToDate == nil } }
-    var moved: [TodoItem]     { todoVM.completed(for: viewDate).filter { $0.movedToDate != nil } }
-    var obeItems: [TodoItem]  { todoVM.obe(for: viewDate) }
-    var allItems:  [TodoItem] { todoVM.items(for: viewDate) }
+    var completed: [TodoItem] { todoVM.completed(for: sharedDate).filter { $0.movedToDate == nil } }
+    var moved: [TodoItem]     { todoVM.completed(for: sharedDate).filter { $0.movedToDate != nil } }
+    var obeItems: [TodoItem]  { todoVM.obe(for: sharedDate) }
+    var allItems:  [TodoItem] { todoVM.items(for: sharedDate) }
 
-    var isToday:  Bool { viewDate == DateUtils.today() }
-    var isPast:   Bool { viewDate < DateUtils.today() }
+    var isToday:  Bool { sharedDate == DateUtils.today() }
+    var isPast:   Bool { sharedDate < DateUtils.today() }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // ── Date navigator ───────────────────────────
-                DateNavigator(viewDate: $viewDate)
+                DateNavigator(sharedDate: $sharedDate)
                     .padding(.horizontal)
                     .padding(.top, 4)
 
@@ -195,11 +195,11 @@ struct DailyListView: View {
                 }
             }
             .sheet(isPresented: $showAddSheet) {
-                ItemFormView(defaultDate: viewDate)
+                ItemFormView(defaultDate: sharedDate)
                     .environmentObject(todoVM)
             }
             .sheet(item: $editItem) { item in
-                ItemFormView(editItem: item, defaultDate: viewDate)
+                ItemFormView(editItem: item, defaultDate: sharedDate)
                     .environmentObject(todoVM)
             }
         }
@@ -209,19 +209,19 @@ struct DailyListView: View {
 // ── DateNavigator ─────────────────────────────────────────────
 
 struct DateNavigator: View {
-    @Binding var viewDate: String
+    @Binding var sharedDate: String
 
     private var label: String {
-        if viewDate == DateUtils.today()     { return "Today" }
-        if viewDate == DateUtils.yesterday() { return "Yesterday" }
-        if viewDate == DateUtils.tomorrow()  { return "Tomorrow" }
-        return viewDate < DateUtils.today() ? "Past" : "Upcoming"
+        if sharedDate == DateUtils.today()     { return "Today" }
+        if sharedDate == DateUtils.yesterday() { return "Yesterday" }
+        if sharedDate == DateUtils.tomorrow()  { return "Tomorrow" }
+        return sharedDate < DateUtils.today() ? "Past" : "Upcoming"
     }
 
     var body: some View {
         HStack {
             Button {
-                viewDate = DateUtils.adding(days: -1, to: viewDate)
+                sharedDate = DateUtils.adding(days: -1, to: sharedDate)
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.title3.weight(.semibold))
@@ -237,14 +237,14 @@ struct DateNavigator: View {
                     .foregroundStyle(Color("Accent"))
                     .textCase(.uppercase)
                     .kerning(1.2)
-                Text(DateUtils.headerString(for: viewDate))
+                Text(DateUtils.headerString(for: sharedDate))
                     .font(.title3.weight(.bold))
             }
 
             Spacer()
 
             Button {
-                viewDate = DateUtils.adding(days: 1, to: viewDate)
+                sharedDate = DateUtils.adding(days: 1, to: sharedDate)
             } label: {
                 Image(systemName: "chevron.right")
                     .font(.title3.weight(.semibold))

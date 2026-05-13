@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		60EE471C2FB40DB300BE1C33 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60EE471B2FB40DAC00BE1C33 /* CalendarView.swift */; };
 		60F4C1D82FA801FB00AE3194 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 60F4C1BF2FA801FB00AE3194 /* README.md */; };
 		60F4C1D92FA801FB00AE3194 /* supabase_schema.sql in Resources */ = {isa = PBXBuildFile; fileRef = 60F4C1C02FA801FB00AE3194 /* supabase_schema.sql */; };
 		60F4C1DA2FA801FB00AE3194 /* ItemFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60F4C1CD2FA801FB00AE3194 /* ItemFormView.swift */; };
@@ -51,6 +52,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		60EE471B2FB40DAC00BE1C33 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		60F4C18C2FA8014700AE3194 /* ToDoDailyList.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ToDoDailyList.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		60F4C1992FA8014900AE3194 /* ToDoDailyListTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ToDoDailyListTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		60F4C1A32FA8014900AE3194 /* ToDoDailyListUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ToDoDailyListUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -237,6 +239,7 @@
 		60F4C1D72FA801FB00AE3194 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				60EE471B2FB40DAC00BE1C33 /* CalendarView.swift */,
 				60F4C1CC2FA801FB00AE3194 /* Components */,
 				60F4C1D02FA801FB00AE3194 /* Sheets */,
 				60F4C1D12FA801FB00AE3194 /* AuthView.swift */,
@@ -412,6 +415,7 @@
 				60F4C1DD2FA801FB00AE3194 /* AuthViewModel.swift in Sources */,
 				60F4C1DE2FA801FB00AE3194 /* HistoryView.swift in Sources */,
 				60F4C1DF2FA801FB00AE3194 /* DailyListApp.swift in Sources */,
+				60EE471C2FB40DB300BE1C33 /* CalendarView.swift in Sources */,
 				60F4C1E02FA801FB00AE3194 /* NotificationService.swift in Sources */,
 				60F4C1E12FA801FB00AE3194 /* SupabaseService.swift in Sources */,
 				60F4C1E22FA801FB00AE3194 /* RolloverView.swift in Sources */,

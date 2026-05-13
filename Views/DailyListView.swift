@@ -7,12 +7,29 @@ struct DailyListView: View {
     @State private var editItem: TodoItem?
 
     var pending: [TodoItem] {
-        todoVM.pending(for: viewDate).sorted {
-            let order: [Priority] = [.high, .medium, .low]
-            let i0 = order.firstIndex(of: $0.priority) ?? 1
-            let i1 = order.firstIndex(of: $1.priority) ?? 1
-            return i0 < i1
+        todoVM.pending(for: viewDate)
+            .filter { $0.recurrence != .daily && $0.templateId == nil ||
+                      $0.recurrence != .daily && $0.templateId != nil && !isDailySpawn($0) }
+            .sorted {
+                let order: [Priority] = [.high, .medium, .low]
+                let i0 = order.firstIndex(of: $0.priority) ?? 1
+                let i1 = order.firstIndex(of: $1.priority) ?? 1
+                return i0 < i1
+            }
+    }
+
+    var dailyItems: [TodoItem] {
+        todoVM.pending(for: viewDate).filter { isDailySpawn($0) }
+    }
+
+    private func isDailySpawn(_ item: TodoItem) -> Bool {
+        // It's a daily item if it's a daily template or a spawn of a daily template
+        if item.recurrence == .daily { return true }
+        if let templateId = item.templateId,
+           let template = todoVM.items.first(where: { $0.id == templateId }) {
+            return template.recurrence == .daily
         }
+        return false
     }
     var completed: [TodoItem] { todoVM.completed(for: viewDate).filter { $0.movedToDate == nil } }
     var moved: [TodoItem]     { todoVM.completed(for: viewDate).filter { $0.movedToDate != nil } }
@@ -97,6 +114,20 @@ struct DailyListView: View {
                             }
                         }
 
+                        if !dailyItems.isEmpty {
+                            Section {
+                                ForEach(dailyItems) { item in
+                                    TodoRow(item: item)
+                                        .environmentObject(todoVM)
+                                        .onTapGesture { editItem = item }
+                                }
+                            } header: {
+                                Label("Daily To Do's", systemImage: "arrow.clockwise.circle.fill")
+                                    .foregroundStyle(.purple)
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                        }
+                        
                         // Completed
                         if !completed.isEmpty {
                             Section("Completed") {

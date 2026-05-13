@@ -221,19 +221,19 @@ final class TodoViewModel: ObservableObject {
     }
 
     // ── Rollover check ───────────────────────────────────────
-
+    
     func checkRollover() async {
         let td = DateUtils.today()
         let leftover = items.filter {
             $0.listDate < td && $0.status == .pending && $0.recurrence == .once
         }
         if !leftover.isEmpty {
-            rolloverItems = leftover
-            showRollover = true
+            await MainActor.run {
+                rolloverItems = leftover
+                showRollover = true
+            }
         }
     }
-
-    // ── Recurring item spawning ──────────────────────────────
 
     func spawnRecurringItems() async {
         guard let userId else { return }
@@ -242,28 +242,29 @@ final class TodoViewModel: ObservableObject {
         // Only true templates
         let templates = items.filter { $0.recurrence != .once && $0.templateId == nil }
         
-        guard !templates.isEmpty else { return }
-        
-        // Check 60 days ahead
-        var datesToCheck: [String] = []
-        for i in 1...60 {
-            datesToCheck.append(DateUtils.adding(days: i, to: td))
-        }
-        
-        var newItems: [TodoItem] = []
-        
         for template in templates {
+            // Start from day after template's own date
+            let startDate = DateUtils.adding(days: 1, to: template.listDate)
+            let endDate60 = DateUtils.adding(days: 60, to: td)
+            
+            var datesToCheck: [String] = []
+            var current = startDate
+            while current <= endDate60 {
+                datesToCheck.append(current)
+                current = DateUtils.adding(days: 1, to: current)
+            }
+            
+            var newItems: [TodoItem] = []
+            
             for date in datesToCheck {
-                // Respect end date
                 if let endDate = template.recurrenceEndDate, date > endDate {
                     continue
                 }
                 
-                // Check if already exists in local items OR newly added items
                 let alreadyExists = items.contains {
-                    ($0.templateId == template.id && $0.listDate == date)
+                    $0.templateId == template.id && $0.listDate == date
                 } || newItems.contains {
-                    ($0.templateId == template.id && $0.listDate == date)
+                    $0.templateId == template.id && $0.listDate == date
                 }
                 
                 guard !alreadyExists else { continue }
@@ -277,11 +278,11 @@ final class TodoViewModel: ObservableObject {
                     self.error = error.localizedDescription
                 }
             }
-        }
-        
-        if !newItems.isEmpty {
-            await MainActor.run {
-                items.append(contentsOf: newItems)
+            
+            if !newItems.isEmpty {
+                await MainActor.run {
+                    items.append(contentsOf: newItems)
+                }
             }
         }
     }

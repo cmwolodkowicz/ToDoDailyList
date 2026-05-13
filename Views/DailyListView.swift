@@ -8,18 +8,20 @@ struct DailyListView: View {
 
     var pending: [TodoItem] {
         todoVM.pending(for: viewDate)
-            .filter { $0.recurrence != .daily && $0.templateId == nil ||
-                      $0.recurrence != .daily && $0.templateId != nil && !isDailySpawn($0) }
+            .filter { !isDailySpawn($0) }
             .sorted {
                 let order: [Priority] = [.high, .medium, .low]
                 let i0 = order.firstIndex(of: $0.priority) ?? 1
                 let i1 = order.firstIndex(of: $1.priority) ?? 1
-                return i0 < i1
+                if i0 != i1 { return i0 < i1 }
+                return $0.orderIndex < $1.orderIndex
             }
     }
 
     var dailyItems: [TodoItem] {
-        todoVM.pending(for: viewDate).filter { isDailySpawn($0) }
+        todoVM.pending(for: viewDate)
+            .filter { isDailySpawn($0) }
+            .sorted { $0.orderIndex < $1.orderIndex }
     }
 
     private func isDailySpawn(_ item: TodoItem) -> Bool {
@@ -56,6 +58,8 @@ struct DailyListView: View {
                 )
                 .padding(.horizontal)
                 .padding(.top, 10)
+                
+                
 
                 // ── List ─────────────────────────────────────
                 if todoVM.isLoading {
@@ -79,6 +83,9 @@ struct DailyListView: View {
                                         .environmentObject(todoVM)
                                         .onTapGesture { editItem = item }
                                 }
+                                .onMove { source, destination in
+                                    Task { await todoVM.reorder(items: highItems, from: source, to: destination) }
+                                }
                             } header: {
                                 Label("High Priority", systemImage: "arrow.up.circle.fill")
                                     .foregroundStyle(.red)
@@ -92,6 +99,9 @@ struct DailyListView: View {
                                     TodoRow(item: item)
                                         .environmentObject(todoVM)
                                         .onTapGesture { editItem = item }
+                                }
+                                .onMove { source, destination in
+                                    Task { await todoVM.reorder(items: mediumItems, from: source, to: destination) }
                                 }
                             } header: {
                                 Label("Medium Priority", systemImage: "minus.circle.fill")
@@ -107,6 +117,9 @@ struct DailyListView: View {
                                         .environmentObject(todoVM)
                                         .onTapGesture { editItem = item }
                                 }
+                                .onMove { source, destination in
+                                    Task { await todoVM.reorder(items: lowItems, from: source, to: destination) }
+                                }
                             } header: {
                                 Label("Low Priority", systemImage: "arrow.down.circle.fill")
                                     .foregroundStyle(.blue)
@@ -120,6 +133,9 @@ struct DailyListView: View {
                                     TodoRow(item: item)
                                         .environmentObject(todoVM)
                                         .onTapGesture { editItem = item }
+                                }
+                                .onMove { source, destination in
+                                    Task { await todoVM.reorder(items: dailyItems, from: source, to: destination) }
                                 }
                             } header: {
                                 Label("Daily To Do's", systemImage: "arrow.clockwise.circle.fill")
@@ -164,6 +180,10 @@ struct DailyListView: View {
             .navigationTitle("DailyList")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    EditButton()
+                        .foregroundStyle(Color("Accent"))
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showAddSheet = true

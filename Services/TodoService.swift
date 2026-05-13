@@ -93,6 +93,44 @@ final class TodoService {
             .eq("id", value: templateId.uuidString)
             .execute()
     }
+    
+    // -- Indicies ---------------------------------------------
+    private struct OrderUpdate: Encodable {
+        let orderIndex: Int
+        let updatedAt: Date
+        
+        enum CodingKeys: String, CodingKey {
+            case orderIndex = "order_index"
+            case updatedAt  = "updated_at"
+        }
+    }
+
+    func updateOrderIndices(_ items: [(id: UUID, orderIndex: Int)]) async throws {
+        for item in items {
+            let update = OrderUpdate(orderIndex: item.orderIndex, updatedAt: Date())
+            try await db
+                .from(table)
+                .update(update)
+                .eq("id", value: item.id.uuidString)
+                .execute()
+        }
+    }
+
+    func updateOrderIndicesForSeries(templateId: UUID, orderIndex: Int) async throws {
+        let update = OrderUpdate(orderIndex: orderIndex, updatedAt: Date())
+        
+        try await db
+            .from(table)
+            .update(update)
+            .eq("template_id", value: templateId.uuidString)
+            .execute()
+        
+        try await db
+            .from(table)
+            .update(update)
+            .eq("id", value: templateId.uuidString)
+            .execute()
+    }
 
     // ── Real-time ────────────────────────────────────────────
 

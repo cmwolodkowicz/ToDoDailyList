@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import Supabase
+import SwiftUI
 
 @MainActor
 final class TodoViewModel: ObservableObject {
@@ -80,6 +81,15 @@ final class TodoViewModel: ObservableObject {
         recurrenceEndDate: String? = nil
     ) async {
         guard let userId else { return }
+        
+        // Calculate next order index for this date/priority group
+        let existingItems = items.filter {
+            $0.listDate == listDate &&
+            $0.priority == priority &&
+            $0.status == .pending
+        }
+        let nextIndex = (existingItems.map { $0.orderIndex }.max() ?? -1) + 1
+        
         var item = TodoItem.create(
             userId: userId,
             title: title,
@@ -88,7 +98,8 @@ final class TodoViewModel: ObservableObject {
             deadline: deadline,
             reminderOffset: reminderOffset,
             recurrence: recurrence,
-            priority: priority
+            priority: priority,
+            orderIndex: nextIndex
         )
         item.recurrenceEndDate = recurrenceEndDate
         do {
@@ -98,7 +109,6 @@ final class TodoViewModel: ObservableObject {
             }
             notifs.scheduleReminder(for: saved)
             
-            // Immediately spawn future occurrences if recurring
             if recurrence != .once {
                 await spawnRecurringItems()
             }
@@ -284,6 +294,50 @@ final class TodoViewModel: ObservableObject {
                     items.append(contentsOf: newItems)
                 }
             }
+        }
+    }
+    
+    func reorder(items sectionItems: [TodoItem], from source: IndexSet, to destination: Int) async {
+        // Build the new order
+        var reordered = sectionItems
+        reordered.move(fromOffsets: source, toOffset: destination)
+        
+        // Assign new order indices
+        var updates: [(id: UUID, orderIndex: Int)] = []
+        for (index, item) in reordered.enumerated() {
+            updates.append((id: item.id, orderIndex: index))
+            
+            // Update local array immediately
+            if let i = items.firstIndex(where: { $0.id == item.id }) {
+                items[i].orderIndex = index
+            }
+        }
+        
+        // Persist to database
+        do {
+            try await service.updateOrderIndices(updates)
+            
+            // If any item is recurring, sync order to all occurrences
+            for item in reordered {
+                let templateId = item.templateId ?? (item.recurrence != .once ? item.id : nil)
+                if let templateId {
+                    let newIndex = updates.first { $0.id == item.id }?.orderIndex ?? 0
+                    try await service.updateOrderIndicesForSeries(
+                        templateId: templateId,
+                        orderIndex: newIndex
+                    )
+                    // Update all local copies too
+                    await MainActor.run {
+                        for i in self.items.indices {
+                            if self.items[i].templateId == templateId || self.items[i].id == templateId {
+                                self.items[i].orderIndex = newIndex
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

@@ -129,6 +129,7 @@ struct TodoItem: Identifiable, Codable, Equatable, Hashable {
     var recurrenceEndDate: String?  // nil = indefinite
     
     var movedToDate: String?
+    var orderIndex: Int
 
     // ── CodingKeys to match Supabase snake_case columns ──────
     enum CodingKeys: String, CodingKey {
@@ -148,6 +149,8 @@ struct TodoItem: Identifiable, Codable, Equatable, Hashable {
         case priority
         case recurrenceEndDate = "recurrence_end_date"
         case movedToDate = "moved_to_date"
+        case orderIndex = "order_index"
+        
     }
 
     // ── Convenience ──────────────────────────────────────────
@@ -182,7 +185,8 @@ extension TodoItem {
         deadline: Date? = nil,
         reminderOffset: Int? = nil,
         recurrence: Recurrence = .once,
-        priority: Priority = .medium
+        priority: Priority = .medium,
+        orderIndex: Int = 0
     ) -> TodoItem {
         let now = Date()
         return TodoItem(
@@ -199,7 +203,10 @@ extension TodoItem {
             templateId: nil,
             createdAt: now,
             updatedAt: now,
-            priority: priority
+            priority: priority,
+            recurrenceEndDate: nil,
+            movedToDate: nil,
+            orderIndex: orderIndex
         )
     }
 
@@ -216,6 +223,7 @@ extension TodoItem {
         copy.createdAt = Date()
         copy.updatedAt = Date()
         copy.recurrenceEndDate = self.recurrenceEndDate
+        copy.orderIndex = self.orderIndex
         return copy
     }
 }

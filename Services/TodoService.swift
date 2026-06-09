@@ -22,13 +22,42 @@ final class TodoService {
 
     /// Fetch items for a specific date range
     func fetch(userId: UUID, from startDate: String, to endDate: String) async throws -> [TodoItem] {
+        var allItems: [TodoItem] = []
+        var offset = 0
+        let batchSize = 1000
+        
+        while true {
+            let batch: [TodoItem] = try await db
+                .from(table)
+                .select()
+                .eq("user_id", value: userId.uuidString)
+                .gte("list_date", value: startDate)
+                .lte("list_date", value: endDate)
+                .order("created_at", ascending: true)
+                .range(from: offset, to: offset + batchSize - 1)
+                .execute()
+                .value
+            
+            allItems.append(contentsOf: batch)
+            
+            if batch.count < batchSize {
+                // Last batch — we've fetched everything
+                break
+            }
+            
+            offset += batchSize
+        }
+        
+        return allItems
+    }
+    
+    func fetchTemplates(userId: UUID) async throws -> [TodoItem] {
         let items: [TodoItem] = try await db
             .from(table)
             .select()
             .eq("user_id", value: userId.uuidString)
-            .gte("list_date", value: startDate)
-            .lte("list_date", value: endDate)
-            .order("created_at", ascending: true)
+            .neq("recurrence", value: "once")
+            .is("template_id", value: nil)
             .execute()
             .value
         return items

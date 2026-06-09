@@ -7,6 +7,9 @@ struct TodoRow: View {
     @State private var showMoveSheet = false
     @State private var showDeleteConfirm = false
     @State private var showDeleteOptions = false
+    @State private var showEditOptions = false
+    @State private var editThisItem: TodoItem? = nil
+    @State private var editingItem = false
 
     var isDone: Bool { item.status == .done && item.movedToDate == nil }
     var isMoved: Bool { item.status == .done && item.movedToDate != nil }
@@ -137,6 +140,33 @@ struct TodoRow: View {
         .sheet(isPresented: $showMoveSheet) {
             MoveDateSheet(item: item)
                 .environmentObject(todoVM)
+        }
+        .confirmationDialog("Edit Recurring Item", isPresented: $showEditOptions, titleVisibility: .visible) {
+            Button("Edit This Occurrence Only") {
+                editThisItem = item
+            }
+            Button("Edit Entire Series") {
+                // Pass the template to edit
+                if let templateId = item.templateId,
+                   let template = todoVM.items.first(where: { $0.id == templateId }) {
+                    editThisItem = template
+                } else {
+                    editThisItem = item
+                }
+                editingItem = true
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Do you want to edit just this occurrence or the entire series?")
+        }
+        .sheet(item: $editThisItem) { itemToEdit in
+            ItemFormView(
+                editItem: itemToEdit,
+                defaultDate: itemToEdit.listDate,
+                editEntireSeries: editingItem
+            )
+            .environmentObject(todoVM)
+            .onDisappear { editingItem = false }
         }
     }
 

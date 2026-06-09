@@ -5,6 +5,9 @@ struct DailyListView: View {
     @Binding var sharedDate: String
     @State private var showAddSheet = false
     @State private var editItem: TodoItem?
+    @State private var pendingEditItem: TodoItem? = nil
+    @State private var showEditOptions = false
+    @State private var editEntireSeries = false
 
     var pending: [TodoItem] {
         todoVM.pending(for: sharedDate)
@@ -25,7 +28,6 @@ struct DailyListView: View {
     }
 
     private func isDailySpawn(_ item: TodoItem) -> Bool {
-        // It's a daily item if it's a daily template or a spawn of a daily template
         if item.recurrence == .daily { return true }
         if let templateId = item.templateId,
            let template = todoVM.items.first(where: { $0.id == templateId }) {
@@ -33,13 +35,14 @@ struct DailyListView: View {
         }
         return false
     }
+
     var completed: [TodoItem] { todoVM.completed(for: sharedDate).filter { $0.movedToDate == nil } }
     var moved: [TodoItem]     { todoVM.completed(for: sharedDate).filter { $0.movedToDate != nil } }
     var obeItems: [TodoItem]  { todoVM.obe(for: sharedDate) }
-    var allItems:  [TodoItem] { todoVM.items(for: sharedDate) }
+    var allItems: [TodoItem]  { todoVM.items(for: sharedDate) }
 
-    var isToday:  Bool { sharedDate == DateUtils.today() }
-    var isPast:   Bool { sharedDate < DateUtils.today() }
+    var isToday: Bool { sharedDate == DateUtils.today() }
+    var isPast:  Bool { sharedDate < DateUtils.today() }
 
     var body: some View {
         NavigationStack {
@@ -51,15 +54,13 @@ struct DailyListView: View {
 
                 // ── Stats bar ────────────────────────────────
                 StatsBar(
-                    pending: pending.count,
+                    pending: pending.count + dailyItems.count,
                     done: completed.count,
                     moved: moved.count,
                     obe: obeItems.count
                 )
                 .padding(.horizontal)
                 .padding(.top, 10)
-                
-                
 
                 // ── List ─────────────────────────────────────
                 if todoVM.isLoading {
@@ -70,18 +71,17 @@ struct DailyListView: View {
                     EmptyListView(isToday: isToday)
                 } else {
                     List {
-                        // Pending
-                        // High priority
-                        let highItems = pending.filter { $0.priority == .high }
+                        let highItems   = pending.filter { $0.priority == .high }
                         let mediumItems = pending.filter { $0.priority == .medium }
-                        let lowItems = pending.filter { $0.priority == .low }
+                        let lowItems    = pending.filter { $0.priority == .low }
 
+                        // ── High Priority ────────────────────
                         if !highItems.isEmpty {
                             Section {
                                 ForEach(highItems) { item in
                                     TodoRow(item: item)
                                         .environmentObject(todoVM)
-                                        .onTapGesture { editItem = item }
+                                        .onTapGesture { handleTap(item) }
                                 }
                                 .onMove { source, destination in
                                     Task { await todoVM.reorder(items: highItems, from: source, to: destination) }
@@ -93,12 +93,13 @@ struct DailyListView: View {
                             }
                         }
 
+                        // ── Medium Priority ──────────────────
                         if !mediumItems.isEmpty {
                             Section {
                                 ForEach(mediumItems) { item in
                                     TodoRow(item: item)
                                         .environmentObject(todoVM)
-                                        .onTapGesture { editItem = item }
+                                        .onTapGesture { handleTap(item) }
                                 }
                                 .onMove { source, destination in
                                     Task { await todoVM.reorder(items: mediumItems, from: source, to: destination) }
@@ -110,12 +111,13 @@ struct DailyListView: View {
                             }
                         }
 
+                        // ── Low Priority ─────────────────────
                         if !lowItems.isEmpty {
                             Section {
                                 ForEach(lowItems) { item in
                                     TodoRow(item: item)
                                         .environmentObject(todoVM)
-                                        .onTapGesture { editItem = item }
+                                        .onTapGesture { handleTap(item) }
                                 }
                                 .onMove { source, destination in
                                     Task { await todoVM.reorder(items: lowItems, from: source, to: destination) }
@@ -127,12 +129,13 @@ struct DailyListView: View {
                             }
                         }
 
+                        // ── Daily To Do's ────────────────────
                         if !dailyItems.isEmpty {
                             Section {
                                 ForEach(dailyItems) { item in
                                     TodoRow(item: item)
                                         .environmentObject(todoVM)
-                                        .onTapGesture { editItem = item }
+                                        .onTapGesture { handleTap(item) }
                                 }
                                 .onMove { source, destination in
                                     Task { await todoVM.reorder(items: dailyItems, from: source, to: destination) }
@@ -143,8 +146,8 @@ struct DailyListView: View {
                                     .font(.subheadline.weight(.semibold))
                             }
                         }
-                        
-                        // Completed
+
+                        // ── Completed ────────────────────────
                         if !completed.isEmpty {
                             Section("Completed") {
                                 ForEach(completed) { item in
@@ -153,8 +156,8 @@ struct DailyListView: View {
                                 }
                             }
                         }
-                        
-                        // Moved
+
+                        // ── Moved ────────────────────────────
                         if !moved.isEmpty {
                             Section("Moved") {
                                 ForEach(moved) { item in
@@ -164,7 +167,7 @@ struct DailyListView: View {
                             }
                         }
 
-                        // OBE
+                        // ── No Longer Needed ─────────────────
                         if !obeItems.isEmpty {
                             Section("No Longer Needed") {
                                 ForEach(obeItems) { item in
@@ -177,12 +180,23 @@ struct DailyListView: View {
                     .listStyle(.insetGrouped)
                 }
             }
-            .navigationTitle("DailyList")
+            .navigationTitle(sharedDate == DateUtils.today() ? "Today" : DateUtils.headerString(for: sharedDate))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     EditButton()
                         .foregroundStyle(Color("Accent"))
+                }
+                if sharedDate != DateUtils.today() {
+                    ToolbarItem(placement: .principal) {
+                        Button {
+                            sharedDate = DateUtils.today()
+                        } label: {
+                            Text("Go to Today")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color("Accent"))
+                        }
+                    }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
@@ -194,14 +208,52 @@ struct DailyListView: View {
                     }
                 }
             }
+            .confirmationDialog("Edit Recurring Item", isPresented: $showEditOptions, titleVisibility: .visible) {
+                Button("Edit This Occurrence Only") {
+                    editEntireSeries = false
+                    editItem = pendingEditItem
+                }
+                Button("Edit Entire Series") {
+                    editEntireSeries = true
+                    if let templateId = pendingEditItem?.templateId,
+                       let template = todoVM.items.first(where: { $0.id == templateId }) {
+                        print("DEBUG: Found template - title: \(template.title), recurrence: \(template.recurrence), templateId: \(String(describing: template.templateId))")
+                        editItem = template
+                    } else {
+                        print("DEBUG: No template found, using pendingEditItem - title: \(String(describing: pendingEditItem?.title)), recurrence: \(String(describing: pendingEditItem?.recurrence))")
+                        editItem = pendingEditItem
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingEditItem = nil
+                }
+            } message: {
+                Text("Do you want to edit just this occurrence or the entire series?")
+            }
             .sheet(isPresented: $showAddSheet) {
                 ItemFormView(defaultDate: sharedDate)
                     .environmentObject(todoVM)
             }
             .sheet(item: $editItem) { item in
-                ItemFormView(editItem: item, defaultDate: sharedDate)
-                    .environmentObject(todoVM)
+                ItemFormView(
+                    editItem: item,
+                    defaultDate: sharedDate,
+                    editEntireSeries: editEntireSeries
+                )
+                .environmentObject(todoVM)
+                .onDisappear { editEntireSeries = false }
             }
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────
+
+    private func handleTap(_ item: TodoItem) {
+        if item.recurrence != .once || item.templateId != nil {
+            pendingEditItem = item
+            showEditOptions = true
+        } else {
+            editItem = item
         }
     }
 }

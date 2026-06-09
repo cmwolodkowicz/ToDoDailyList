@@ -23,6 +23,10 @@ final class TodoViewModel: ObservableObject {
     func bootstrap(userId: UUID) async {
         self.userId = userId
         await fetchAll(userId: userId)
+        
+        // Small delay to ensure items array is fully populated before spawning
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        
         await spawnRecurringItems()
         await checkRollover()
         subscribeRealtime(userId: userId)
@@ -35,8 +39,20 @@ final class TodoViewModel: ObservableObject {
         isLoading = true
         do {
             let start = DateUtils.adding(days: -30, to: DateUtils.today())
-            let end = DateUtils.adding(days: 60, to: DateUtils.today())
-            items = try await service.fetch(userId: userId, from: start, to: end)
+            let end = DateUtils.adding(days: 180, to: DateUtils.today())
+            var fetched = try await service.fetch(userId: userId, from: start, to: end)
+            
+            // Always fetch recurring templates regardless of their list_date
+            let templates = try await service.fetchTemplates(userId: userId)
+            
+            // Merge templates in, avoiding duplicates
+            for template in templates {
+                if !fetched.contains(where: { $0.id == template.id }) {
+                    fetched.append(template)
+                }
+            }
+            
+            items = fetched
         } catch {
             self.error = error.localizedDescription
         }
@@ -76,6 +92,7 @@ final class TodoViewModel: ObservableObject {
         listDate: String,
         deadline: Date?,
         reminderOffset: Int?,
+        reminderDate: Date? = nil,
         recurrence: Recurrence,
         priority: Priority = .medium,
         recurrenceEndDate: String? = nil
@@ -102,6 +119,7 @@ final class TodoViewModel: ObservableObject {
             orderIndex: nextIndex
         )
         item.recurrenceEndDate = recurrenceEndDate
+        item.reminderDate = reminderDate
         do {
             let saved = try await service.insert(item)
             await MainActor.run {
@@ -125,6 +143,50 @@ final class TodoViewModel: ObservableObject {
             apply(updated)
             notifs.cancelReminder(for: item.id)
             notifs.scheduleReminder(for: updated)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+    
+    func updateSeries(_ item: TodoItem) async {
+        let templateId = item.templateId ?? item.id
+        
+        // Get the fields we want to propagate to all occurrences
+        do {
+            // Update the template itself
+            if let templateIndex = items.firstIndex(where: { $0.id == templateId }) {
+                var template = items[templateIndex]
+                template.title = item.title
+                template.notes = item.notes
+                template.priority = item.priority
+                template.deadline = item.deadline
+                template.reminderOffset = item.reminderOffset
+                template.recurrenceEndDate = item.recurrenceEndDate
+                template.updatedAt = Date()
+                let savedTemplate = try await service.update(template)
+                await MainActor.run { items[templateIndex] = savedTemplate }
+            }
+            
+            // Update all spawned copies
+            let copies = items.filter { $0.templateId == templateId }
+            for copy in copies {
+                var updated = copy
+                updated.title = item.title
+                updated.notes = item.notes
+                updated.priority = item.priority
+                updated.deadline = item.deadline
+                updated.reminderOffset = item.reminderOffset
+                updated.recurrenceEndDate = item.recurrenceEndDate
+                updated.updatedAt = Date()
+                let saved = try await service.update(updated)
+                await MainActor.run {
+                    if let i = self.items.firstIndex(where: { $0.id == copy.id }) {
+                        self.items[i] = saved
+                    }
+                }
+                notifs.cancelReminder(for: copy.id)
+                notifs.scheduleReminder(for: saved)
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -255,11 +317,11 @@ final class TodoViewModel: ObservableObject {
         for template in templates {
             // Start from day after template's own date
             let startDate = DateUtils.adding(days: 1, to: template.listDate)
-            let endDate60 = DateUtils.adding(days: 60, to: td)
+            let endDate360 = DateUtils.adding(days: 360, to: td)
             
             var datesToCheck: [String] = []
             var current = startDate
-            while current <= endDate60 {
+            while current <= endDate360 {
                 datesToCheck.append(current)
                 current = DateUtils.adding(days: 1, to: current)
             }
@@ -285,7 +347,12 @@ final class TodoViewModel: ObservableObject {
                     let saved = try await service.insert(spawned)
                     newItems.append(saved)
                 } catch {
-                    self.error = error.localizedDescription
+                    // Silently ignore unique constraint violations (duplicate spawns)
+                    // Any other error should still be reported
+                    let errorString = error.localizedDescription
+                    if !errorString.contains("duplicate") && !errorString.contains("unique") {
+                        self.error = errorString
+                    }
                 }
             }
             
@@ -294,6 +361,7 @@ final class TodoViewModel: ObservableObject {
                     items.append(contentsOf: newItems)
                 }
             }
+            
         }
     }
     

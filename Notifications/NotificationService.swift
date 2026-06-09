@@ -47,7 +47,9 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
     // ── Item reminders ───────────────────────────────────────
 
     func scheduleReminder(for item: TodoItem) {
-        guard let fireDate = item.reminderFireDate, fireDate > Date() else { return }
+        // Use deadline-based reminder if available, otherwise use direct reminder date
+        let fireDate = item.reminderFireDate ?? item.reminderDate
+        guard let fireDate, fireDate > Date() else { return }
 
         let content = UNMutableNotificationContent()
         content.title = item.title

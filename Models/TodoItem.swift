@@ -130,6 +130,8 @@ struct TodoItem: Identifiable, Codable, Equatable, Hashable {
     
     var movedToDate: String?
     var orderIndex: Int
+    
+    var reminderDate: Date?
 
     // ── CodingKeys to match Supabase snake_case columns ──────
     enum CodingKeys: String, CodingKey {
@@ -150,6 +152,7 @@ struct TodoItem: Identifiable, Codable, Equatable, Hashable {
         case recurrenceEndDate = "recurrence_end_date"
         case movedToDate = "moved_to_date"
         case orderIndex = "order_index"
+        case reminderDate = "reminder_date"
         
     }
 

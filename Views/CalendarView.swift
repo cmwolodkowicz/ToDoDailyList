@@ -23,12 +23,10 @@ struct CalendarView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // ── Month navigator ──────────────────────────
                 MonthNavigator(displayedMonth: $displayedMonth)
                     .padding(.horizontal)
                     .padding(.top, 8)
 
-                // ── Weekday headers ──────────────────────────
                 HStack {
                     ForEach(weekdays, id: \.self) { day in
                         Text(day)
@@ -39,10 +37,9 @@ struct CalendarView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.top, 12)
-                .padding(.bottom, 4)
+                .padding(.bottom, 6)
 
-                // ── Calendar grid ────────────────────────────
-                LazyVGrid(columns: columns, spacing: 8) {
+                LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(Array(daysInMonth().enumerated()), id: \.offset) { index, date in
                         if let date {
                             DayCell(
@@ -51,7 +48,8 @@ struct CalendarView: View {
                                 isToday: date == DateUtils.today(),
                                 isPast: date < DateUtils.today(),
                                 itemCount: todoVM.items(for: date).filter { $0.status == .pending }.count,
-                                completedCount: todoVM.items(for: date).filter { $0.status == .done }.count
+                                completedCount: todoVM.items(for: date).filter { $0.status == .done }.count,
+                                items: todoVM.pending(for: date)
                             )
                             .onTapGesture {
                                 sharedDate = date
@@ -59,44 +57,16 @@ struct CalendarView: View {
                             }
                         } else {
                             Color.clear
-                                .frame(height: 44)
+                                .frame(minHeight: 70)
                         }
                     }
                 }
                 .padding(.horizontal, 8)
-
-                Divider()
-                    .padding(.top, 12)
-
-                // ── Selected day list ────────────────────────
-                SelectedDayView(
-                    date: selectedDate,
-                    editItem: $editItem,
-                    showAddSheet: $showAddSheet
-                )
-                .environmentObject(todoVM)
+                
+                Spacer()
             }
             .navigationTitle("Calendar")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showAddSheet = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(Color("Accent"))
-                    }
-                }
-            }
-            .sheet(isPresented: $showAddSheet) {
-                ItemFormView(defaultDate: sharedDate)
-                    .environmentObject(todoVM)
-            }
-            .sheet(item: $editItem) { item in
-                ItemFormView(editItem: item, defaultDate: sharedDate)
-                    .environmentObject(todoVM)
-            }
         }
     }
 
@@ -183,6 +153,7 @@ struct DayCell: View {
     let isPast: Bool
     let itemCount: Int
     let completedCount: Int
+    let items: [TodoItem]
 
     private var dayNumber: String {
         guard let date = DateUtils.date(from: dateString) else { return "" }
@@ -190,133 +161,65 @@ struct DayCell: View {
     }
 
     var body: some View {
-        VStack(spacing: 3) {
-            ZStack {
-                // Background
-                Circle()
-                    .fill(isSelected ? Color("Accent") : isToday ? Color("Accent").opacity(0.15) : Color.clear)
-                    .frame(width: 36, height: 36)
-
-                Text(dayNumber)
-                    .font(.system(size: 15, weight: isToday || isSelected ? .bold : .regular))
-                    .foregroundStyle(
-                        isSelected ? .white :
-                        isToday ? Color("Accent") :
-                        isPast ? .secondary : .primary
-                    )
-            }
-
-            // Dot indicators
-            HStack(spacing: 3) {
-                if itemCount > 0 {
-                    Circle()
-                        .fill(Color("Accent"))
-                        .frame(width: 5, height: 5)
-                }
-                if completedCount > 0 {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 5, height: 5)
-                }
-            }
-            .frame(height: 6)
-        }
-        .frame(height: 52)
-    }
-}
-
-// ── SelectedDayView ───────────────────────────────────────────
-
-struct SelectedDayView: View {
-    @EnvironmentObject var todoVM: TodoViewModel
-    let date: String
-    @Binding var editItem: TodoItem?
-    @Binding var showAddSheet: Bool
-
-    var allItems: [TodoItem] { todoVM.items(for: date) }
-    var pending: [TodoItem] {
-        todoVM.pending(for: date).sorted {
-            let order: [Priority] = [.high, .medium, .low]
-            let i0 = order.firstIndex(of: $0.priority) ?? 1
-            let i1 = order.firstIndex(of: $1.priority) ?? 1
-            if i0 != i1 { return i0 < i1 }
-            return $0.orderIndex < $1.orderIndex
-        }
-    }
-    var completed: [TodoItem] { todoVM.completed(for: date).filter { $0.movedToDate == nil } }
-    var moved: [TodoItem] { todoVM.completed(for: date).filter { $0.movedToDate != nil } }
-    var obeItems: [TodoItem] { todoVM.obe(for: date) }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Day header
+        VStack(alignment: .leading, spacing: 3) {
+            // Day number circle
             HStack {
-                Text(DateUtils.headerString(for: date))
-                    .font(.headline)
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Color("Accent") : isToday ? Color("Accent").opacity(0.15) : Color.clear)
+                        .frame(width: 28, height: 28)
+                    Text(dayNumber)
+                        .font(.system(size: 13, weight: isToday || isSelected ? .bold : .regular))
+                        .foregroundStyle(
+                            isSelected ? .white :
+                            isToday ? Color("Accent") :
+                            isPast ? .secondary : .primary
+                        )
+                }
                 Spacer()
-                Text("\(pending.count) pending")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
 
-            if allItems.isEmpty {
-                VStack(spacing: 10) {
-                    Spacer()
-                    Image(systemName: "checklist")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.tertiary)
-                    Text("No items for this day")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Button {
-                        showAddSheet = true
-                    } label: {
-                        Label("Add Item", systemImage: "plus")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color("Accent"))
-                    }
-                    Spacer()
-                }
-            } else {
-                List {
-                    if !pending.isEmpty {
-                        Section("Pending") {
-                            ForEach(pending) { item in
-                                TodoRow(item: item)
-                                    .environmentObject(todoVM)
-                                    .onTapGesture { editItem = item }
-                            }
+            // Item previews
+            if !items.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(items.prefix(3)) { item in
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(priorityColor(item.priority))
+                                .frame(width: 5, height: 5)
+                            Text(item.title)
+                                .font(.system(size: 8))
+                                .foregroundStyle(.primary.opacity(0.7))
+                                .lineLimit(1)
                         }
                     }
-                    if !completed.isEmpty {
-                        Section("Completed") {
-                            ForEach(completed) { item in
-                                TodoRow(item: item)
-                                    .environmentObject(todoVM)
-                            }
-                        }
-                    }
-                    if !moved.isEmpty {
-                        Section("Moved") {
-                            ForEach(moved) { item in
-                                TodoRow(item: item)
-                                    .environmentObject(todoVM)
-                            }
-                        }
-                    }
-                    if !obeItems.isEmpty {
-                        Section("No Longer Needed") {
-                            ForEach(obeItems) { item in
-                                TodoRow(item: item)
-                                    .environmentObject(todoVM)
-                            }
-                        }
+                    if items.count > 3 {
+                        Text("+\(items.count - 3) more")
+                            .font(.system(size: 7))
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .listStyle(.insetGrouped)
             }
+
+            Spacer(minLength: 0)
+        }
+        .padding(4)
+        .frame(maxWidth: .infinity, minHeight: 70)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Color("Accent").opacity(0.1) : Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isSelected ? Color("Accent").opacity(0.3) : Color.clear, lineWidth: 1)
+                )
+        )
+    }
+
+    private func priorityColor(_ priority: Priority) -> Color {
+        switch priority {
+        case .high:   return .red
+        case .medium: return .orange
+        case .low:    return .blue
         }
     }
 }

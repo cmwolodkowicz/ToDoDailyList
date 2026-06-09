@@ -20,9 +20,11 @@ struct ItemFormView: View {
     @State private var priority: Priority = .medium
     @State private var hasEndDate = false
     @State private var recurrenceEndDate = Date()
+    @State private var reminderDateTime = Date()
 
     var isEditing: Bool { editItem != nil }
     var isValid:   Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
+    var editEntireSeries: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -56,15 +58,21 @@ struct ItemFormView: View {
 
                     if hasDeadline {
                         DatePicker("Deadline", selection: $deadline, displayedComponents: [.date, .hourAndMinute])
+                    }
+                }
 
-                        Toggle("Set Reminder", isOn: $hasReminder)
+                Section("Reminder") {
+                    Toggle("Set Reminder", isOn: $hasReminder)
 
-                        if hasReminder {
+                    if hasReminder {
+                        if hasDeadline {
                             Picker("Remind Me", selection: $reminderOffset) {
                                 ForEach(ReminderOffset.allCases) { offset in
                                     Text(offset.displayName).tag(offset)
                                 }
                             }
+                        } else {
+                            DatePicker("Reminder Time", selection: $reminderDateTime, displayedComponents: [.date, .hourAndMinute])
                         }
                     }
                 }
@@ -110,14 +118,40 @@ struct ItemFormView: View {
                     .fontWeight(.semibold)
                 }
             }
-            .onAppear { prefill() }
+            .onAppear {
+                if let item = editItem {
+                    title      = item.title
+                    notes      = item.notes ?? ""
+                    listDate   = item.listDate
+                    recurrence = item.recurrence
+                    priority   = item.priority
+                    
+                    if let d = item.deadline {
+                        hasDeadline = true
+                        deadline    = d
+                    }
+                    if let offset = item.reminderOffsetEnum {
+                        hasReminder    = true
+                        reminderOffset = offset
+                    }
+                    if let rd = item.reminderDate {
+                        hasReminder      = true
+                        reminderDateTime = rd
+                    }
+                    if let endDate = item.recurrenceEndDate {
+                        hasEndDate        = true
+                        recurrenceEndDate = DateUtils.date(from: endDate) ?? Date()
+                    }
+                } else {
+                    listDate = defaultDate
+                }
+            }
         }
     }
 
     // ── Prefill when editing ──────────────────────────────────
 
     private func prefill() {
-        listDate = defaultDate
         guard let item = editItem else { return }
         title      = item.title
         notes      = item.notes ?? ""
@@ -137,6 +171,10 @@ struct ItemFormView: View {
             hasEndDate = true
             recurrenceEndDate = DateUtils.date(from: endDate) ?? Date()
         }
+        if let rd = item.reminderDate {
+            hasReminder = true
+            reminderDateTime = rd
+        }
     }
 
     // ── Save ─────────────────────────────────────────────────
@@ -145,30 +183,36 @@ struct ItemFormView: View {
         isSaving = true
         let finalDeadline       = hasDeadline ? deadline : nil
         let finalReminderOffset = (hasDeadline && hasReminder) ? reminderOffset.rawValue : nil
+        let finalReminderDate   = (!hasDeadline && hasReminder) ? reminderDateTime : nil
 
         if let existing = editItem {
             var updated = existing
-            updated.title          = title.trimmingCharacters(in: .whitespaces)
-            updated.notes          = notes.isEmpty ? nil : notes
-            updated.listDate       = listDate
-            updated.deadline       = finalDeadline
-            updated.reminderOffset = finalReminderOffset
-            updated.recurrence     = recurrence
-            updated.priority       = priority
-            // In edit path
+            updated.title             = title.trimmingCharacters(in: .whitespaces)
+            updated.notes             = notes.isEmpty ? nil : notes
+            updated.listDate          = listDate
+            updated.deadline          = finalDeadline
+            updated.reminderOffset    = finalReminderOffset
+            updated.reminderDate      = finalReminderDate
+            updated.recurrence        = recurrence
+            updated.priority          = priority
             updated.recurrenceEndDate = hasEndDate ? DateUtils.string(from: recurrenceEndDate) : nil
+            updated.movedToDate       = existing.movedToDate
 
-            // In create path — update addItem call to include it
-            await todoVM.updateItem(updated)
+            if editEntireSeries {
+                await todoVM.updateSeries(updated)
+            } else {
+                await todoVM.updateItem(updated)
+            }
         } else {
             await todoVM.addItem(
-                title:          title.trimmingCharacters(in: .whitespaces),
-                notes:          notes.isEmpty ? nil : notes,
-                listDate:       listDate,
-                deadline:       finalDeadline,
-                reminderOffset: finalReminderOffset,
-                recurrence:     recurrence,
-                priority:       priority,
+                title:              title.trimmingCharacters(in: .whitespaces),
+                notes:              notes.isEmpty ? nil : notes,
+                listDate:           listDate,
+                deadline:           finalDeadline,
+                reminderOffset:     finalReminderOffset,
+                reminderDate:       finalReminderDate,
+                recurrence:         recurrence,
+                priority:           priority,
                 recurrenceEndDate:  hasEndDate ? DateUtils.string(from: recurrenceEndDate) : nil
             )
         }

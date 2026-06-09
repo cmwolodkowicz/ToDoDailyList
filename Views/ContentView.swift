@@ -19,10 +19,10 @@ struct ContentView: View {
                     .tabItem { Label("Calendar", systemImage: "calendar") }
                     .tag(1)
 
-                HistoryView()
-                    .environmentObject(todoVM)
-                    .tabItem { Label("History", systemImage: "clock") }
-                    .tag(2)
+//                HistoryView()
+//                    .environmentObject(todoVM)
+//                    .tabItem { Label("History", systemImage: "clock") }
+//                    .tag(2)
 
                 SettingsView()
                     .environmentObject(authVM)

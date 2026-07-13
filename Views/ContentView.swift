@@ -36,12 +36,27 @@ struct ContentView: View {
                 .environmentObject(todoVM)
         }
         .task {
+            print("DEBUG: Task started, currentUser: \(String(describing: authVM.currentUser?.id))")
+            var attempts = 0
+            while authVM.currentUser == nil && attempts < 10 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                attempts += 1
+                print("DEBUG: Waiting for auth, attempt \(attempts), currentUser: \(String(describing: authVM.currentUser?.id))")
+            }
+            
             if let userId = authVM.currentUser?.id {
+                print("DEBUG: Calling bootstrap with userId: \(userId)")
                 await todoVM.bootstrap(userId: userId)
+            } else {
+                print("DEBUG: No user found after waiting, bootstrap not called")
             }
         }
         .onChange(of: authVM.currentUser) { _, newUser in
-            if newUser == nil {
+            print("DEBUG: onChange triggered, newUser: \(String(describing: newUser?.id))")
+            if let userId = newUser?.id, todoVM.items.isEmpty {
+                print("DEBUG: Calling bootstrap from onChange")
+                Task { await todoVM.bootstrap(userId: userId) }
+            } else if newUser == nil {
                 todoVM.cleanup()
             }
         }

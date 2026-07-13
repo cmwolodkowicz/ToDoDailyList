@@ -21,16 +21,30 @@ final class TodoViewModel: ObservableObject {
     // ── Bootstrap ────────────────────────────────────────────
 
     func bootstrap(userId: UUID) async {
+        print("DEBUG: Bootstrap started")
         self.userId = userId
         await fetchAll(userId: userId)
+        print("DEBUG: fetchAll complete, items count: \(items.count)")
         
-        // Small delay to ensure items array is fully populated before spawning
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        // Only spawn if we haven't done so today
+        let lastSpawnKey = "lastSpawnDate_\(userId.uuidString)"
+        let lastSpawn = UserDefaults.standard.string(forKey: lastSpawnKey)
+        let td = DateUtils.today()
         
-        await spawnRecurringItems()
+        if lastSpawn != td {
+            print("DEBUG: Running spawn")
+            await spawnRecurringItems()
+            UserDefaults.standard.set(td, forKey: lastSpawnKey)
+            print("DEBUG: Spawn complete")
+        } else {
+            print("DEBUG: Skipping spawn, already ran today")
+        }
+        
         await checkRollover()
+        print("DEBUG: checkRollover complete, showRollover: \(showRollover), rolloverItems: \(rolloverItems.count)")
         subscribeRealtime(userId: userId)
         notifs.scheduleDailyReminder()
+        print("DEBUG: Bootstrap complete")
     }
 
     // ── Fetch ────────────────────────────────────────────────
@@ -294,16 +308,37 @@ final class TodoViewModel: ObservableObject {
 
     // ── Rollover check ───────────────────────────────────────
     
+//    func checkRollover() async {
+//        let td = DateUtils.today()
+//        let leftover = items.filter {
+//            $0.listDate < td &&
+//            $0.status == .pending &&
+//            $0.recurrence == .once &&
+//            $0.templateId == nil  // exclude spawned recurring copies
+//        }
+//        if !leftover.isEmpty {
+//            await MainActor.run {
+//                rolloverItems = leftover
+//                showRollover = true
+//            }
+//        }
+//    }
     func checkRollover() async {
         let td = DateUtils.today()
         let leftover = items.filter {
-            $0.listDate < td && $0.status == .pending && $0.recurrence == .once
+            $0.listDate < td &&
+            $0.status == .pending &&
+            $0.recurrence == .once &&
+            $0.templateId == nil
         }
-        if !leftover.isEmpty {
-            await MainActor.run {
-                rolloverItems = leftover
-                showRollover = true
-            }
+        print("DEBUG: Rollover leftover count: \(leftover.count)")
+        print("DEBUG: Leftover titles: \(leftover.map { $0.title })")
+        
+        // Temporarily force show even if empty to test the sheet
+        await MainActor.run {
+            rolloverItems = leftover
+            showRollover = true
+            print("DEBUG: showRollover set to \(showRollover)")
         }
     }
 
